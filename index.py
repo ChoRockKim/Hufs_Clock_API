@@ -151,7 +151,7 @@ def crawl_meals() -> List[Dict[str, Any]]:
 @app.get("/api/data")
 def get_all_data(response: Response):
     """모든 크롤링 함수를 병렬로 실행하고 결과를 종합하여 반환하는 메인 엔드포인트"""
-    # response.headers["Cache-Control"] = "public, s-maxage=43200"
+    response.headers["Cache-Control"] = "public, s-maxage=43200"
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_schedule = executor.submit(crawl_schedule)
