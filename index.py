@@ -54,7 +54,7 @@ def crawl_schedule() -> Dict[str, str]:
         
         return _extract_schedule_dates(content_wrap.find_all('li'))
     except Exception as e:
-        print(f"[API ERROR] 학사일정 크롤링 실패: {e}")
+        pass
         return {}
 
 def _extract_schedule_dates(items: List[Any]) -> Dict[str, str]:
@@ -92,7 +92,7 @@ def crawl_notices(url: str) -> List[Dict[str, str]]:
             notices.append({'date': date, 'title': title, 'link': HUFS_DOMAIN + link})
         return notices
     except Exception as e:
-        print(f"[API ERROR] 공지사항 크롤링 실패 (URL: {url}): {e}")
+        pass
         return []
 
 def crawl_meals() -> List[Dict[str, Any]]:
@@ -141,7 +141,7 @@ def crawl_meals() -> List[Dict[str, Any]]:
             meals.append({'time': meal_time, 'menus': menus})
         return meals
     except Exception as e:
-        print(f"[API ERROR] 학식 크롤링 실패: {e}")
+        pass
         return []
 
 # ===============================================================================
