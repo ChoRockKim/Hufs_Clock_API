@@ -134,8 +134,16 @@ def crawl_meals():
             for td in tds:
                 strong_tag = td.find('strong', class_='point')
                 pay_tag = td.find('p', class_='pay')
+
+                # strong 태그가 있으면 그것을, 없으면 td 전체 텍스트를 메뉴로 사용
+                if strong_tag:
+                    menu_name = strong_tag.get_text(strip=True)
+                else:
+                    # 가격 태그가 있다면, 메뉴 이름에 포함되지 않도록 임시로 제거
+                    if pay_tag:
+                        pay_tag.decompose()
+                    menu_name = td.get_text(separator='\n', strip=True)
                 
-                menu_name = strong_tag.get_text(strip=True) if strong_tag else ''
                 price = pay_tag.get_text(strip=True) if pay_tag else ''
                 
                 menus.append({
