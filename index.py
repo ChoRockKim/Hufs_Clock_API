@@ -130,7 +130,18 @@ def crawl_meals():
             tds = row.find_all('td')
             if not th or not tds: continue
             meal_time = th.get_text(strip=True)
-            menus = [td.get_text(separator='\n', strip=True) for td in tds]
+            menus = []
+            for td in tds:
+                strong_tag = td.find('strong', class_='point')
+                pay_tag = td.find('p', class_='pay')
+                
+                menu_name = strong_tag.get_text(strip=True) if strong_tag else ''
+                price = pay_tag.get_text(strip=True) if pay_tag else ''
+                
+                menus.append({
+                    "name": menu_name,
+                    "price": price
+                })
             meals.append({'time': meal_time, 'menus': menus})
         
         print(f"[DEBUG] crawl_meals: 크롤링 성공, {len(meals)}개 식사 시간대 추출")
