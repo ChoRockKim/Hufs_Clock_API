@@ -85,10 +85,19 @@ def crawl_notices(url: str) -> List[Dict[str, str]]:
             title_td = row.find('td', class_='td-subject')
             date_td = row.find('td', class_='td-date')
             if not (title_td and date_td and title_td.find('a')): continue
-            
-            link = title_td.find('a')['href']
-            title = title_td.find('a').get_text(strip=True)
+
+            a_tag = title_td.find('a')
+            link = a_tag['href']
             date = date_td.get_text(strip=True)
+
+            # <strong> 태그에서 제목 추출
+            strong_tag = a_tag.find('strong')
+            title = strong_tag.get_text(strip=True) if strong_tag else a_tag.get_text(strip=True)
+
+            # "new" 클래스를 가진 <span> 태그 확인 후 " (NEW)" 추가
+            if a_tag.find('span', class_='new'):
+                title += " (NEW)"
+            
             notices.append({'date': date, 'title': title, 'link': HUFS_DOMAIN + link})
         return notices
     except Exception as e:
