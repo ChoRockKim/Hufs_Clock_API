@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-import concurrent.futures
 from typing import List, Dict, Any
 
 # ===============================================================================
@@ -52,9 +51,11 @@ def crawl_schedule() -> Dict[str, str]:
         if not content_wrap:
             raise ValueError("학사일정 콘텐츠 영역을 찾을 수 없습니다.")
         
-        return _extract_schedule_dates(content_wrap.find_all('li'))
+        schedule_dates = _extract_schedule_dates(content_wrap.find_all('li'))
+        print("Crawled schedule:", schedule_dates)
+        return schedule_dates
     except Exception as e:
-        pass
+        print("Error crawling schedule:", str(e))
         return {}
 
 def _extract_schedule_dates(items: List[Any]) -> Dict[str, str]:
@@ -99,24 +100,27 @@ def crawl_notices(url: str) -> List[Dict[str, str]]:
                 title += " (NEW)"
             
             notices.append({'date': date, 'title': title, 'link': HUFS_DOMAIN + link})
+        print("Crawled notices from", url, ":", notices)
         return notices
     except Exception as e:
-        pass
+        print("Error crawling notices from", url, ":", str(e))
         return []
 
 def crawl_meals() -> List[Dict[str, Any]]:
     """HUFS 학식 API를 호출하여 이번 주 학식 메뉴를 가져옵니다."""
     try:
         today = datetime.now()
-        start_of_week = today - timedelta(days=today.weekday())
-        end_of_week = start_of_week + timedelta(days=6)
+        # HUFS는 일요일부터 주 시작으로 가정
+        days_to_subtract = (today.weekday() + 1) % 7
+        start_of_week = today - timedelta(days=days_to_subtract)
+        end_of_week = start_of_week + timedelta(days=5)  # 6일 주 (일~금)
 
         payload = {
             "selCafId": "h101",
             "selWeekFirstDay": start_of_week.day,
             "selWeekLastDay": end_of_week.day,
             "selYear": today.year,
-            "selMonth": today.month
+            "selMonth": start_of_week.month
         }
 
         api_url = "https://www.hufs.ac.kr/cafeteria/hufs/1/getMenu.do"
@@ -145,12 +149,18 @@ def crawl_meals() -> List[Dict[str, Any]]:
                     menu_name = td.get_text(separator='\n', strip=True)
                 
                 price = pay_tag.get_text(strip=True) if pay_tag else ''
+                
+                # 메뉴가 없는 경우 제외
+                if "등록된 메뉴가" in menu_name:
+                    continue
+                
                 menus.append({"name": menu_name, "price": price})
             
             meals.append({'time': meal_time, 'menus': menus})
+        print("Crawled meals:", meals)
         return meals
     except Exception as e:
-        pass
+        print("Error crawling meals:", str(e))
         return []
 
 # ===============================================================================
@@ -159,19 +169,13 @@ def crawl_meals() -> List[Dict[str, Any]]:
 
 @app.get("/api/data")
 def get_all_data(response: Response):
-    """모든 크롤링 함수를 병렬로 실행하고 결과를 종합하여 반환하는 메인 엔드포인트"""
+    """모든 크롤링 함수를 순차적으로 실행하고 결과를 종합하여 반환하는 메인 엔드포인트"""
     response.headers["Cache-Control"] = "public, s-maxage=43200"
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_schedule = executor.submit(crawl_schedule)
-        future_general_notices = executor.submit(crawl_notices, url="https://www.hufs.ac.kr/hufs/11281/subview.do")
-        future_haksa_notices = executor.submit(crawl_notices, url="https://www.hufs.ac.kr/hufs/11282/subview.do")
-        future_meals = executor.submit(crawl_meals)
-
-        schedule = future_schedule.result()
-        general_notices = future_general_notices.result()
-        haksa_notices = future_haksa_notices.result()
-        meals = future_meals.result()
+    schedule = crawl_schedule()
+    general_notices = crawl_notices(url="https://www.hufs.ac.kr/hufs/11281/subview.do")
+    haksa_notices = crawl_notices(url="https://www.hufs.ac.kr/hufs/11282/subview.do")
+    meals = crawl_meals()
 
     all_notices = sorted(
         general_notices + haksa_notices,
