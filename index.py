@@ -190,6 +190,21 @@ def get_all_data(response: Response):
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/api/library")
+def get_library_seats():
+    url = "https://lib.hufs.ac.kr/pyxis-api/1/seat-rooms?smufMethodCode=PC&roomTypeId=2&branchGroupId=1"
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers)
+        data = response.json()
+
+        return data
+    except Exception as e:
+        return {"success" : False, "message": str(e)}
+
 @app.get("/")
 def root():
     """API 서버의 상태를 확인하기 위한 기본 엔드포인트"""
