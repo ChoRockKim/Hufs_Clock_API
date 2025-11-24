@@ -115,8 +115,11 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
         start_of_week = today - timedelta(days=days_to_subtract)
         end_of_week = start_of_week + timedelta(days=5)  # 6일 주 (일~금)
 
+        # 캠퍼스별 식당 ID 설정
+        caf_id = "h101" if campus_path == "1" else "h203"
+
         payload = {
-            "selCafId": "h101",
+            "selCafId": caf_id,
             "selWeekFirstDay": start_of_week.day,
             "selWeekLastDay": end_of_week.day,
             "selYear": today.year,
