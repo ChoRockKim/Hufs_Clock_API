@@ -144,9 +144,12 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
                 menu_name = ""
 
                 if menu_items_li:
-                    # ul > li 구조가 있는 경우 (글로벌, 인문 캠퍼스 공통)
-                    menu_texts = [li.get_text(strip=True) for li in menu_items_li if li.get_text(strip=True)]
-                    menu_name = '\n'.join(menu_texts)
+                    # li 안의 strong 태그 텍스트만 추출
+                    strong_texts = [
+                        s.get_text(strip=True) 
+                        for s in td.select('ul > li > strong')
+                    ]
+                    menu_name = '\n'.join(strong_texts)
                 else:
                     # ul > li 구조가 없는 경우를 위한 폴백
                     if pay_tag: pay_tag.decompose()
