@@ -163,6 +163,11 @@ def crawl_meals() -> List[Dict[str, Any]]:
         print("Error crawling meals:", str(e))
         return []
 
+
+
+
+
+
 # ===============================================================================
 # 3. API 엔드포인트
 # ===============================================================================
@@ -170,7 +175,7 @@ def crawl_meals() -> List[Dict[str, Any]]:
 @app.get("/api/data")
 def get_all_data(response: Response):
     """모든 크롤링 함수를 순차적으로 실행하고 결과를 종합하여 반환하는 메인 엔드포인트"""
-    response.headers["Cache-Control"] = "public, s-maxage=43200"
+    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=600"
 
     schedule = crawl_schedule()
     general_notices = crawl_notices(url="https://www.hufs.ac.kr/hufs/11281/subview.do")
@@ -191,15 +196,20 @@ def get_all_data(response: Response):
     }
 
 @app.get("/api/library")
-def get_library_seats():
+def get_library_seats(response: Response): # 1. response 객체 받기
     url = "https://lib.hufs.ac.kr/pyxis-api/1/seat-rooms?smufMethodCode=PC&roomTypeId=2&branchGroupId=1"
+
+    # 캐시 시간 1분
+    # s-maxage=60: 1분 동안은 저장된 거 보여줌 (학교 서버 보호)
+    # stale-while-revalidate=60: 1분 지났으면 1분 더 옛날 거 보여주고 뒤에서 갱신
+    response.headers["Cache-Control"] = "s-maxage=60, stale-while-revalidate=60"
 
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 ..." 
         }
-        response = requests.get(url, headers=headers)
-        data = response.json()
+        response_data = requests.get(url, headers=headers) # 변수명 겹치지 않게 response -> response_data로 변경
+        data = response_data.json()
 
         return data
     except Exception as e:
