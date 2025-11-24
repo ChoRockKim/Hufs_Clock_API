@@ -106,7 +106,7 @@ def crawl_notices(url: str) -> List[Dict[str, str]]:
         print("Error crawling notices from", url, ":", str(e))
         return []
 
-def crawl_meals() -> List[Dict[str, Any]]:
+def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
     """HUFS 학식 API를 호출하여 이번 주 학식 메뉴를 가져옵니다."""
     try:
         today = datetime.now()
@@ -123,7 +123,7 @@ def crawl_meals() -> List[Dict[str, Any]]:
             "selMonth": start_of_week.month
         }
 
-        api_url = "https://www.hufs.ac.kr/cafeteria/hufs/1/getMenu.do"
+        api_url = f"https://www.hufs.ac.kr/cafeteria/hufs/{campus_path}/getMenu.do"
         response = requests.post(api_url, data=payload, headers=HEADERS)
         response.raise_for_status()
         
@@ -157,13 +157,19 @@ def crawl_meals() -> List[Dict[str, Any]]:
                 menus.append({"name": menu_name, "price": price})
             
             meals.append({'time': meal_time, 'menus': menus})
-        print("Crawled meals:", meals)
+        print(f"Crawled meals for campus {campus_path}:", meals)
         return meals
     except Exception as e:
-        print("Error crawling meals:", str(e))
+        print(f"Error crawling meals for campus {campus_path}:", str(e))
         return []
 
+def crawl_meals() -> List[Dict[str, Any]]:
+    """인문캠퍼스 학식 메뉴를 크롤링합니다."""
+    return _crawl_meals_by_campus("1")
 
+def crawl_global_meals() -> List[Dict[str, Any]]:
+    """글로벌캠퍼스 학식 메뉴를 크롤링합니다."""
+    return _crawl_meals_by_campus("2")
 
 
 
@@ -172,21 +178,25 @@ def crawl_meals() -> List[Dict[str, Any]]:
 # 3. API 엔드포인트
 # ===============================================================================
 
-@app.get("/api/data")
-def get_all_data(response: Response):
-    """모든 크롤링 함수를 순차적으로 실행하고 결과를 종합하여 반환하는 메인 엔드포인트"""
-    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=600"
-
+def _get_common_data():
+    """공통 데이터(학사일정, 공지사항)를 크롤링하고 정렬합니다."""
     schedule = crawl_schedule()
     general_notices = crawl_notices(url="https://www.hufs.ac.kr/hufs/11281/subview.do")
     haksa_notices = crawl_notices(url="https://www.hufs.ac.kr/hufs/11282/subview.do")
-    meals = crawl_meals()
 
     all_notices = sorted(
         general_notices + haksa_notices,
         key=lambda x: x.get('date', '0000-00-00'),
         reverse=True
     )
+    return schedule, all_notices
+
+@app.get("/api/data")
+def get_all_data(response: Response):
+    """인문캠퍼스 데이터를 반환합니다."""
+    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=600"
+    schedule, all_notices = _get_common_data()
+    meals = crawl_meals()
 
     return {
         "schedule": schedule,
@@ -194,6 +204,21 @@ def get_all_data(response: Response):
         "meals": meals,
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get('/api/global/data')
+def get_global_data(response: Response):
+    """글로벌캠퍼스 데이터를 반환합니다."""
+    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=600"
+    schedule, all_notices = _get_common_data()
+    meals = crawl_global_meals()
+
+    return {
+        "schedule": schedule,
+        "notices": all_notices,
+        "meals": meals,
+        "timestamp": datetime.now().isoformat()
+    }
+
 
 @app.get("/api/library")
 def get_library_seats(response: Response): # 1. response 객체 받기
