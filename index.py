@@ -139,19 +139,23 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
             meal_time = th.get_text(strip=True)
             menus = []
             for td in tds:
-                strong_tag = td.find('strong', class_='point')
                 pay_tag = td.find('p', class_='pay')
+                menu_items_li = td.select('ul > li')
+                menu_name = ""
 
-                if strong_tag:
-                    menu_name = strong_tag.get_text(strip=True)
+                if menu_items_li:
+                    # ul > li 구조가 있는 경우 (글로벌, 인문 캠퍼스 공통)
+                    menu_texts = [li.get_text(strip=True) for li in menu_items_li if li.get_text(strip=True)]
+                    menu_name = '\n'.join(menu_texts)
                 else:
+                    # ul > li 구조가 없는 경우를 위한 폴백
                     if pay_tag: pay_tag.decompose()
                     menu_name = td.get_text(separator='\n', strip=True)
-                
+
                 price = pay_tag.get_text(strip=True) if pay_tag else ''
                 
                 # 메뉴가 없는 경우 제외
-                if "등록된 메뉴가" in menu_name:
+                if "등록된 메뉴가" in menu_name or not menu_name.strip():
                     continue
                 
                 menus.append({"name": menu_name, "price": price})
