@@ -194,7 +194,7 @@ def _get_common_data():
 @app.get("/api/data")
 def get_all_data(response: Response):
     """인문캠퍼스 데이터를 반환합니다."""
-    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=600"
+    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=60"
     schedule, all_notices = _get_common_data()
     meals = crawl_meals()
 
@@ -208,16 +208,22 @@ def get_all_data(response: Response):
 @app.get('/api/global/data')
 def get_global_data(response: Response):
     """글로벌캠퍼스 데이터를 반환합니다."""
-    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=600"
+    response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=60"
     schedule, all_notices = _get_common_data()
     meals = crawl_global_meals()
 
-    return {
+    data_to_return = {
         "schedule": schedule,
         "notices": all_notices,
         "meals": meals,
         "timestamp": datetime.now().isoformat()
     }
+    
+    print("--- Crawled data for /api/global/data ---")
+    print(data_to_return)
+    print("------------------------------------------")
+    
+    return data_to_return
 
 
 @app.get("/api/library")
