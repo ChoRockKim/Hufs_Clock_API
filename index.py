@@ -143,20 +143,26 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
             menus = []
             for td in tds:
                 pay_tag = td.find('p', class_='pay')
-                menu_items_li = td.select('ul > li')
                 menu_name = ""
 
-                if menu_items_li:
-                    # li 안의 strong 태그 텍스트만 추출
-                    strong_texts = [
-                        s.get_text(strip=True) 
-                        for s in td.select('ul > li > strong')
-                    ]
-                    menu_name = '\n'.join(strong_texts)
+                # 글로벌캠퍼스 '이벤트 데이' 특별 처리
+                event_day_tag = td.select_one('ul > li:nth-child(1) > strong.point')
+                if campus_path == "2" and event_day_tag and "** 이벤트 데이 **" in event_day_tag.get_text(strip=True):
+                    # 이벤트 데이는 두 번째 li에 strong 태그 없이 메뉴가 있음
+                    event_menu_li = td.select_one('ul > li:nth-child(2)')
+                    if event_menu_li:
+                        menu_name = event_menu_li.get_text(separator='\n', strip=True)
                 else:
-                    # ul > li 구조가 없는 경우를 위한 폴백
-                    if pay_tag: pay_tag.decompose()
-                    menu_name = td.get_text(separator='\n', strip=True)
+                    # 일반적인 경우 (기존 로직)
+                    menu_items_li = td.select('ul > li')
+                    if menu_items_li:
+                        # li 안의 strong 태그 텍스트만 추출
+                        strong_texts = [s.get_text(strip=True) for s in td.select('ul > li > strong')]
+                        menu_name = '\n'.join(strong_texts)
+                    else:
+                        # ul > li 구조가 없는 경우를 위한 폴백
+                        if pay_tag: pay_tag.decompose()
+                        menu_name = td.get_text(separator='\n', strip=True)
 
                 price = pay_tag.get_text(strip=True) if pay_tag else ''
                 
