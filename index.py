@@ -34,7 +34,7 @@ HUFS_DOMAIN = "https://www.hufs.ac.kr"
 def crawl_schedule() -> Dict[str, str]:
     """HUFS 웹사이트에서 학사일정을 크롤링합니다."""
     try:
-        response = requests.get(f"{HUFS_DOMAIN}/hufs/index.do#section4", headers=HEADERS)
+        response = requests.get(f"{HUFS_DOMAIN}/hufs/index.do#section4", headers=HEADERS, timeout=5)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -43,7 +43,7 @@ def crawl_schedule() -> Dict[str, str]:
             raise ValueError("학사일정 링크 CSS 선택자를 찾을 수 없습니다.")
 
         schedule_url = HUFS_DOMAIN + schedule_link['href']
-        schedule_response = requests.get(schedule_url, headers=HEADERS)
+        schedule_response = requests.get(schedule_url, headers=HEADERS, timeout=5)
         schedule_response.raise_for_status()
         
         schedule_soup = BeautifulSoup(schedule_response.text, 'html.parser')
@@ -76,7 +76,7 @@ def _extract_schedule_dates(items: List[Any]) -> Dict[str, str]:
 def crawl_notices(url: str) -> List[Dict[str, str]]:
     """HUFS 웹사이트에서 일반 또는 학사 공지사항을 크롤링합니다."""
     try:
-        response = requests.get(url, headers=HEADERS)
+        response = requests.get(url, headers=HEADERS, timeout=5)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         notice_rows = soup.select("tbody tr:not(.notice)")
@@ -127,7 +127,7 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
         }
 
         api_url = f"https://www.hufs.ac.kr/cafeteria/hufs/{campus_path}/getMenu.do"
-        response = requests.post(api_url, data=payload, headers=HEADERS)
+        response = requests.post(api_url, data=payload, headers=HEADERS, timeout=5)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -255,7 +255,7 @@ def get_library_seats(response: Response): # 1. response 객체 받기
         headers = {
             "User-Agent": "Mozilla/5.0 ..." 
         }
-        response_data = requests.get(url, headers=headers) # 변수명 겹치지 않게 response -> response_data로 변경
+        response_data = requests.get(url, headers=headers, timeout=5) # 변수명 겹치지 않게 response -> response_data로 변경
         data = response_data.json()
 
         return data
