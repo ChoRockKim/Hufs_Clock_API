@@ -111,10 +111,9 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
     print(f"\n\n[!!!] Attempting to crawl meals for campus_path: {campus_path} [!!!]\n\n")
     try:
         today = datetime.now()
-        # HUFS는 일요일부터 주 시작으로 가정
-        days_to_subtract = (today.weekday() + 1) % 7
-        start_of_week = today - timedelta(days=days_to_subtract)
-        end_of_week = start_of_week + timedelta(days=5)  # 6일 주 (일~금)
+        # 식당 페이지와 동일하게 월요일~토요일 범위로 계산
+        start_of_week = today - timedelta(days=today.weekday())  # 월요일
+        end_of_week = start_of_week + timedelta(days=5)  # 토요일
 
         # 캠퍼스별 식당 ID 설정
         caf_id = "h101" if campus_path == "1" else "h203"
@@ -124,7 +123,7 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
             "selWeekFirstDay": start_of_week.day,
             "selWeekLastDay": end_of_week.day,
             "selYear": today.year,
-            "selMonth": start_of_week.month
+            "selMonth": today.month  # 페이지는 현재 월을 그대로 전송
         }
 
         api_url = f"https://www.hufs.ac.kr/cafeteria/hufs/{campus_path}/getMenu.do"
