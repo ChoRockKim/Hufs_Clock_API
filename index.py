@@ -108,6 +108,7 @@ def crawl_notices(url: str) -> List[Dict[str, str]]:
 
 def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
     """HUFS 학식 API를 호출하여 이번 주 학식 메뉴를 가져옵니다."""
+    print(f"\n\n[!!!] Attempting to crawl meals for campus_path: {campus_path} [!!!]\n\n")
     try:
         today = datetime.now()
         # HUFS는 일요일부터 주 시작으로 가정
@@ -140,6 +141,7 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
             if not th or not tds: continue
 
             meal_time = th.get_text(strip=True)
+            print(f"\n[Debug] Processing meal time: '{meal_time}'")
             menus = []
             for td in tds:
                 pay_tag = td.find('p', class_='pay')
@@ -156,9 +158,12 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
                     # 일반적인 경우 (기존 로직)
                     menu_items_li = td.select('ul > li')
                     if menu_items_li:
-                        # li 안의 strong 태그 텍스트만 추출
-                        strong_texts = [s.get_text(strip=True) for s in td.select('ul > li > strong')]
-                        menu_name = '\n'.join(strong_texts)
+                        # strong.point 태그가 없을 때를 대비해 li 텍스트 전체를 폴백으로 사용
+                        strong_texts = [s.get_text(strip=True) for s in td.select('ul > li > strong.point')]
+                        if strong_texts:
+                            menu_name = '\n'.join(strong_texts)
+                        else:
+                            menu_name = '\n'.join(li.get_text(separator=' ', strip=True) for li in menu_items_li)
                     else:
                         # ul > li 구조가 없는 경우를 위한 폴백
                         if pay_tag: pay_tag.decompose()
@@ -166,11 +171,15 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
 
                 price = pay_tag.get_text(strip=True) if pay_tag else ''
                 
+                print(f"  > Found menu for one day: '{menu_name.strip()}'")
+
                 # 메뉴가 없는 경우 제외
                 if "등록된 메뉴가" in menu_name or not menu_name.strip():
+                    print(f"    - Skipping: Menu is empty or marked as not registered.")
                     continue
                 
                 menus.append({"name": menu_name, "price": price})
+                print(f"    - Success: Added to the list for '{meal_time}'.")
             
             meals.append({'time': meal_time, 'menus': menus})
         print(f"Crawled meals for campus {campus_path}:", meals)
@@ -186,6 +195,24 @@ def crawl_meals() -> List[Dict[str, Any]]:
 def crawl_global_meals() -> List[Dict[str, Any]]:
     """글로벌캠퍼스 학식 메뉴를 크롤링합니다."""
     return _crawl_meals_by_campus("2")
+
+
+def _debug_print_meals(campus_label: str, meals: List[Dict[str, Any]]) -> None:
+    """학식 목록을 콘솔에 보기 좋게 출력합니다."""
+    print(f"\n--- Meal debug ({campus_label}) ---")
+    if not meals:
+        print("No meals found.")
+        return
+    for meal in meals:
+        print(f"[{meal.get('time')}]")
+        if not meal.get('menus'):
+            print("  - (empty)")
+            continue
+        for idx, item in enumerate(meal['menus'], start=1):
+            name = item.get('name', '').replace('\n', ' | ')
+            price = item.get('price', '')
+            print(f"  {idx}. {name} ({price})")
+    print("--- End meal debug ---\n")
 
 
 
@@ -213,6 +240,7 @@ def get_all_data(response: Response):
     response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=60"
     schedule, all_notices = _get_common_data()
     meals = crawl_meals()
+    _debug_print_meals("Humanities", meals)
 
     return {
         "schedule": schedule,
@@ -227,6 +255,7 @@ def get_global_data(response: Response):
     response.headers["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=60"
     schedule, all_notices = _get_common_data()
     meals = crawl_global_meals()
+    _debug_print_meals("Global", meals)
 
     data_to_return = {
         "schedule": schedule,
