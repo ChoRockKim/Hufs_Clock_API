@@ -46,18 +46,60 @@ LIBRARY_CONFIG = {
     }
 }
 
-# 요청시간 계산 함수
+# 요청시간 계산 함수 (초단기실황용)
 def get_base_time():
+    # 한국 시간대 설정
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
-    if now.minute < 45:
-        now = now - timedelta(hours=1)
     
-    base_date = now.strftime('%Y%m%d')
-    base_time = now.strftime('%H00')
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    # 현재 분이 10분 미만이면 1시간 전 데이터 사용
+    # 예: 08:05 → 08:10 이전 → 07:00 데이터
+    # 예: 08:15 → 08:10 이후 → 08:00 데이터
+    if current_minute < 10:
+        # 1시간 전으로 이동
+        base_time_dt = now - timedelta(hours=1)
+    else:
+        # 현재 시간 사용
+        base_time_dt = now
+    
+    base_date = base_time_dt.strftime('%Y%m%d')
+    base_time = base_time_dt.strftime('%H00')
     
     return base_date, base_time
 
+# 단기예보용 base_time 계산 함수
+def get_forecast_base_time():
+    """단기예보 발표시각 계산 (0200, 0500, 0800, 1100, 1400, 1700, 2000, 2300)"""
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
+    
+    # 단기예보 발표시각 (1일 8회)
+    base_times = [2, 5, 8, 11, 14, 17, 20, 23]
+    current_hour = now.hour
+    current_minute = now.minute
+    
+    base_hour = None
+    
+    # 역순으로 확인하여 가장 최근의 사용 가능한 base_time 찾기
+    for bt in reversed(base_times):
+        # 현재 시간이 base_time:10 이후인지 확인
+        if current_hour > bt or (current_hour == bt and current_minute >= 10):
+            base_hour = bt
+            break
+    
+    # 현재 시간이 02:10 이전이면 전날 23:00 사용
+    if base_hour is None:
+        yesterday = now - timedelta(days=1)
+        base_date = yesterday.strftime('%Y%m%d')
+        base_time = "2300"
+    else:
+        base_date = now.strftime('%Y%m%d')
+        base_time = f"{base_hour:02d}00"
+    
+    return base_date, base_time
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -310,7 +352,6 @@ def get_global_data(response: Response):
 
 @app.get("/api/library")
 def get_library_seats(response: Response, campus: str = Query("SEOUL")): # 1. response 객체 받기
-    url = "https://lib.hufs.ac.kr/pyxis-api/1/seat-rooms?smufMethodCode=PC&roomTypeId=2&branchGroupId=1"
 
     # 캐시 시간 1분
     # s-maxage=60: 1분 동안은 저장된 거 보여줌 (학교 서버 보호)
@@ -335,14 +376,21 @@ def get_library_seats(response: Response, campus: str = Query("SEOUL")): # 1. re
 
 @app.get("/api/weather")
 def get_weather(campus: str = Query("SEOUL")):
+    """날씨 정보를 반환합니다."""
     axis = CAMPUS_AXIS.get(campus, CAMPUS_AXIS['SEOUL'])
     nx = axis['nx']
     ny = axis['ny']
 
+    # 초단기실황용 base_time
     base_date, base_time = get_base_time()
-    url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
+    # 단기예보용 base_time
+    forecast_date, forecast_time = get_forecast_base_time()
     
-    params = {
+    url_current = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
+    url_forecast = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
+
+    # 초단기실황 파라미터
+    params_current = {
         'serviceKey': OPENWEATHER_API_KEY,
         'pageNo': '1',
         'numOfRows': '1000',
@@ -352,34 +400,103 @@ def get_weather(campus: str = Query("SEOUL")):
         'nx': nx,
         'ny': ny
     }
+    
+    # 단기예보 파라미터
+    params_forecast = {
+        'serviceKey': OPENWEATHER_API_KEY,
+        'pageNo': '1',
+        'numOfRows': '1000',
+        'dataType': 'JSON',
+        'base_date': forecast_date,
+        'base_time': forecast_time,
+        'nx': nx,
+        'ny': ny
+    }
 
     try:
-        response = requests.get(url, params=params, timeout=15)
-        data = response.json()
-        items = data['response']['body']['items']['item']
+        # 초단기실황 API 호출
+        response_current = requests.get(url_current, params=params_current, timeout=15)
+        response_current.raise_for_status()
+        data_current = response_current.json()
+        
+        # 응답 구조 검증
+        if 'response' not in data_current or 'body' not in data_current['response']:
+            raise ValueError("Invalid current weather API response structure")
+        
+        if 'items' not in data_current['response']['body'] or 'item' not in data_current['response']['body']['items']:
+            raise ValueError("No items in current weather API response")
+        
+        items_current = data_current['response']['body']['items']['item']
+        
+        # items가 리스트가 아닌 경우 처리
+        if not isinstance(items_current, list):
+            items_current = [items_current]
         
         result = {
             "temp": "-",
             "humidity": "-",
-            "rainType": "0"
+            "rainType": "0",
+            "sky": "-",      # 하늘상태
+            "tmn": "-",      # 최저기온
+            "tmx": "-"       # 최고기온
         }
-        for item in items:
+        
+        # 초단기실황 데이터 파싱
+        for item in items_current:
             if item['category'] == 'T1H': # 기온
                 result['temp'] = item['obsrValue']
             elif item['category'] == 'REH': # 습도
                 result['humidity'] = item['obsrValue']
             elif item['category'] == 'PTY': # 강수형태
                 result['rainType'] = item['obsrValue']
-
+        
+        # 단기예보 API 호출
+        response_forecast = requests.get(url_forecast, params=params_forecast, timeout=15)
+        response_forecast.raise_for_status()
+        data_forecast = response_forecast.json()
+        
+        if 'response' in data_forecast and 'body' in data_forecast['response']:
+            if 'items' in data_forecast['response']['body'] and 'item' in data_forecast['response']['body']['items']:
+                items_forecast = data_forecast['response']['body']['items']['item']
+                
+                # items가 리스트가 아닌 경우 처리
+                if not isinstance(items_forecast, list):
+                    items_forecast = [items_forecast]
+                
+                # 단기예보 데이터 파싱 (오늘 날짜의 데이터만)
+                today_str = datetime.now(timezone(timedelta(hours=9))).strftime('%Y%m%d')
+                
+                # SKY는 시간대별로 다르므로 최신 시간대 선택
+                sky_time = '0000'
+                # TMN, TMX는 하루에 한 번만 제공되므로 첫 번째 값 사용
+                tmn_found = False
+                tmx_found = False
+                
+                for item in items_forecast:
+                    # 오늘 날짜의 데이터만 사용
+                    if item.get('fcstDate') == today_str:
+                        if item['category'] == 'SKY': # 하늘상태
+                            # 가장 최근 시간대의 데이터 사용
+                            if item.get('fcstTime', '0000') > sky_time:
+                                result['sky'] = item['fcstValue']
+                                sky_time = item.get('fcstTime', '0000')
+                        elif item['category'] == 'TMN' and not tmn_found: # 최저기온 (한 번만)
+                            result['tmn'] = item['fcstValue']
+                            tmn_found = True
+                        elif item['category'] == 'TMX' and not tmx_found: # 최고기온 (한 번만)
+                            result['tmx'] = item['fcstValue']
+                            tmx_found = True
+        
         return {
-            "status" : "success",
-            "campus" : campus,
-            "checkTime" : f"{base_date} {base_time[:2]}",
-            "data" : result
+            "status": "success",
+            "campus": campus,
+            "checkTime": f"{base_date} {base_time[:2]}",
+            "forecastTime": f"{forecast_date} {forecast_time[:2]}",
+            "data": result
         }
 
     except Exception as e:
-        return {"status" : 'error', "message": str(e)}
+        return {"status": 'error', "message": str(e)}
 
 @app.get("/")
 def root():
