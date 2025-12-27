@@ -5,7 +5,7 @@ from fastapi import FastAPI, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
 
 load_dotenv()
@@ -36,7 +36,8 @@ CAMPUS_AXIS = {
 
 # 요청시간 계산 함수
 def get_base_time():
-    now = datetime.now()
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
     if now.minute < 45:
         now = now - timedelta(hours=1)
     
