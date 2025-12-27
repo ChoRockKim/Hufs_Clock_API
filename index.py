@@ -463,29 +463,75 @@ def get_weather(campus: str = Query("SEOUL")):
                 if not isinstance(items_forecast, list):
                     items_forecast = [items_forecast]
                 
-                # 단기예보 데이터 파싱 (오늘 날짜의 데이터만)
-                today_str = datetime.now(timezone(timedelta(hours=9))).strftime('%Y%m%d')
+                # 단기예보 데이터 파싱
+                kst = timezone(timedelta(hours=9))
+                today = datetime.now(kst)
+                today_str = today.strftime('%Y%m%d')
+                tomorrow_str = (today + timedelta(days=1)).strftime('%Y%m%d')
                 
-                # SKY는 시간대별로 다르므로 최신 시간대 선택
+                # SKY는 시간대별로 다르므로 최신 시간대 선택 (오늘 날짜 우선)
                 sky_time = '0000'
+                sky_date = ''
                 # TMN, TMX는 하루에 한 번만 제공되므로 첫 번째 값 사용
                 tmn_found = False
                 tmx_found = False
                 
+                # 디버깅: TMN, TMX 항목 수집
+                tmn_candidates = []
+                tmx_candidates = []
+                
                 for item in items_forecast:
-                    # 오늘 날짜의 데이터만 사용
-                    if item.get('fcstDate') == today_str:
-                        if item['category'] == 'SKY': # 하늘상태
-                            # 가장 최근 시간대의 데이터 사용
-                            if item.get('fcstTime', '0000') > sky_time:
-                                result['sky'] = item['fcstValue']
-                                sky_time = item.get('fcstTime', '0000')
-                        elif item['category'] == 'TMN' and not tmn_found: # 최저기온 (한 번만)
-                            result['tmn'] = item['fcstValue']
-                            tmn_found = True
-                        elif item['category'] == 'TMX' and not tmx_found: # 최고기온 (한 번만)
-                            result['tmx'] = item['fcstValue']
-                            tmx_found = True
+                    fcst_date = item.get('fcstDate', '')
+                    fcst_time = item.get('fcstTime', '0000')
+                    category = item.get('category', '')
+                    
+                    if category == 'SKY': # 하늘상태
+                        # 오늘 날짜의 가장 최근 시간대 데이터 사용
+                        if fcst_date == today_str and fcst_time > sky_time:
+                            result['sky'] = item['fcstValue']
+                            sky_time = fcst_time
+                            sky_date = fcst_date
+                    elif category == 'TMN': # 최저기온
+                        # 오늘 또는 내일 날짜의 TMN 수집
+                        if fcst_date in [today_str, tomorrow_str]:
+                            tmn_candidates.append({
+                                'date': fcst_date,
+                                'time': fcst_time,
+                                'value': item['fcstValue']
+                            })
+                            # 오늘 날짜의 TMN 우선 사용
+                            if fcst_date == today_str and not tmn_found:
+                                result['tmn'] = item['fcstValue']
+                                tmn_found = True
+                    elif category == 'TMX': # 최고기온
+                        # 오늘 또는 내일 날짜의 TMX 수집
+                        if fcst_date in [today_str, tomorrow_str]:
+                            tmx_candidates.append({
+                                'date': fcst_date,
+                                'time': fcst_time,
+                                'value': item['fcstValue']
+                            })
+                            # 오늘 날짜의 TMX 우선 사용
+                            if fcst_date == today_str and not tmx_found:
+                                result['tmx'] = item['fcstValue']
+                                tmx_found = True
+                
+                # 오늘 날짜에 없으면 내일 날짜에서 찾기
+                if not tmn_found and tmn_candidates:
+                    # 가장 가까운 날짜의 TMN 사용
+                    result['tmn'] = tmn_candidates[0]['value']
+                    tmn_found = True
+                
+                if not tmx_found and tmx_candidates:
+                    # 가장 가까운 날짜의 TMX 사용
+                    result['tmx'] = tmx_candidates[0]['value']
+                    tmx_found = True
+                
+                # 디버깅 로그 (선택사항)
+                if not tmn_found:
+                    print(f"[DEBUG] TMN not found. Available candidates: {tmn_candidates}")
+                if not tmx_found:
+                    print(f"[DEBUG] TMX not found. Available candidates: {tmx_candidates}")
         
         return {
             "status": "success",
