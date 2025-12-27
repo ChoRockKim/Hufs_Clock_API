@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*- 
-
-from fastapi import FastAPI, Response
+import os
+from dotenv import load_dotenv
+from fastapi import FastAPI, Response, Query
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+
+load_dotenv()
 
 # ===============================================================================
 # 1. 기본 설정 (FastAPI 앱, 미들웨어, 상수)
@@ -21,6 +24,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 기상청 API 키
+OPENWEATHER_API_KEY = os.getenv('WEATHER_SERVICE_KEY')
+
+# 캠퍼스별 좌표
+CAMPUS_AXIS = {
+    'SEOUL' : {'nx' : 61, 'ny' : 127},
+    'GLOBAL' : {'nx' : 65, 'ny' : 122}
+}
+
+# 요청시간 계산 함수
+def get_base_time():
+    now = datetime.now()
+    if now.minute < 45:
+        now = now - timedelta(hours=1)
+    
+    base_date = now.strftime('%Y%m%d')
+    base_time = now.strftime('%H00')
+    
+    return base_date, base_time
+
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -289,6 +313,54 @@ def get_library_seats(response: Response): # 1. response 객체 받기
         return data
     except Exception as e:
         return {"success" : False, "message": str(e)}
+
+@app.get("/api/weather")
+def get_weather(campus: str = Query("SEOUL")):
+    axis = CAMPUS_AXIS.get(campus, CAMPUS_AXIS['SEOUL'])
+    nx = axis['nx']
+    ny = axis['ny']
+
+    base_date, base_time = get_base_time()
+    url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
+    
+    params = {
+        'serviceKey': OPENWEATHER_API_KEY,
+        'pageNo': '1',
+        'numOfRows': '1000',
+        'dataType': 'JSON',
+        'base_date': base_date,
+        'base_time': base_time,
+        'nx': nx,
+        'ny': ny
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        data = response.json()
+        items = data['response']['body']['items']['item']
+        
+        result = {
+            "temp": "-",
+            "humidity": "-",
+            "rainType": "0"
+        }
+        for item in items:
+            if item['category'] == 'T1H': # 기온
+                result['temp'] = item['obsrValue']
+            elif item['category'] == 'REH': # 습도
+                result['humidity'] = item['obsrValue']
+            elif item['category'] == 'PTY': # 강수형태
+                result['rainType'] = item['obsrValue']
+
+        return {
+            "status" : "success",
+            "campus" : campus,
+            "checkTime" : f"{base_date} {base_time[:2]}",
+            "data" : result
+        }
+
+    except Exception as e:
+        return {"status" : 'error', "message": str(e)}
 
 @app.get("/")
 def root():
