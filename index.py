@@ -309,7 +309,7 @@ def get_global_data(response: Response):
 
 
 @app.get("/api/library")
-def get_library_seats(campus: str = Query("SEOUL"), response: Response): # 1. response 객체 받기
+def get_library_seats(response: Response, campus: str = Query("SEOUL")): # 1. response 객체 받기
     url = "https://lib.hufs.ac.kr/pyxis-api/1/seat-rooms?smufMethodCode=PC&roomTypeId=2&branchGroupId=1"
 
     # 캐시 시간 1분
