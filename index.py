@@ -34,6 +34,18 @@ CAMPUS_AXIS = {
     'GLOBAL' : {'nx' : 65, 'ny' : 122}
 }
 
+# 캠퍼스 별 도서관 요청 param
+LIBRARY_CONFIG = {
+    'SEOUL' : {
+        'api_path' : '1',
+        'branch_group_id' : '1'
+    },
+    'GLOBAL' : {
+        'api_path' : '2',
+        'branch_group_id' : '2'
+    }
+}
+
 # 요청시간 계산 함수
 def get_base_time():
     kst = timezone(timedelta(hours=9))
@@ -79,6 +91,7 @@ def crawl_schedule() -> Dict[str, str]:
         schedule_dates = _extract_schedule_dates(content_wrap.find_all('li'))
         print("Crawled schedule:", schedule_dates)
         return schedule_dates
+
     except Exception as e:
         print("Error crawling schedule:", str(e))
         return {}
@@ -296,7 +309,7 @@ def get_global_data(response: Response):
 
 
 @app.get("/api/library")
-def get_library_seats(response: Response): # 1. response 객체 받기
+def get_library_seats(campus: str = Query("SEOUL"), response: Response): # 1. response 객체 받기
     url = "https://lib.hufs.ac.kr/pyxis-api/1/seat-rooms?smufMethodCode=PC&roomTypeId=2&branchGroupId=1"
 
     # 캐시 시간 1분
@@ -304,14 +317,19 @@ def get_library_seats(response: Response): # 1. response 객체 받기
     # stale-while-revalidate=60: 1분 지났으면 1분 더 옛날 거 보여주고 뒤에서 갱신
     response.headers["Cache-Control"] = "s-maxage=60, stale-while-revalidate=60"
 
+    config = LIBRARY_CONFIG.get(campus.upper(), LIBRARY_CONFIG['SEOUL'])
+    url = f"https://lib.hufs.ac.kr/pyxis-api/{config['api_path']}/seat-rooms?smufMethodCode=PC&roomTypeId=2&branchGroupId={config['branch_group_id']}"
+    
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 ..." 
         }
-        response_data = requests.get(url, headers=headers, timeout=5) # 변수명 겹치지 않게 response -> response_data로 변경
+        response_data = requests.get(url, headers=headers, timeout=10) # 변수명 겹치지 않게 response -> response_data로 변경
         data = response_data.json()
+        data['campus'] = campus.upper()
 
         return data
+
     except Exception as e:
         return {"success" : False, "message": str(e)}
 
