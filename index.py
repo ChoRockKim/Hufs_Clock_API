@@ -486,11 +486,20 @@ def get_weather(campus: str = Query("SEOUL")):
                     category = item.get('category', '')
                     
                     if category == 'SKY': # 하늘상태
-                        # 오늘 날짜의 가장 최근 시간대 데이터 사용
-                        if fcst_date == today_str and fcst_time > sky_time:
-                            result['sky'] = item['fcstValue']
-                            sky_time = fcst_time
-                            sky_date = fcst_date
+                        # 오늘 또는 내일 날짜 확인
+                        if fcst_date in [today_str, tomorrow_str]:
+                            # 오늘 날짜 우선
+                            if fcst_date == today_str:
+                                if fcst_time > sky_time:
+                                    result['sky'] = item['fcstValue']
+                                    sky_time = fcst_time
+                                    sky_date = fcst_date
+                            elif fcst_date == tomorrow_str:
+                                # 오늘 날짜에 SKY가 없을 때만 내일 날짜 사용
+                                if sky_date == '' or (sky_date == tomorrow_str and fcst_time > sky_time):
+                                    result['sky'] = item['fcstValue']
+                                    sky_time = fcst_time
+                                    sky_date = fcst_date
                     elif category == 'TMN': # 최저기온
                         # 오늘 또는 내일 날짜의 TMN 수집
                         if fcst_date in [today_str, tomorrow_str]:
