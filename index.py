@@ -289,6 +289,11 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
 
                 price = pay_tag.get_text(strip=True) if pay_tag else ''
                 
+                # 서울캠퍼스 조식에서 "방학중에는"을 "방학"으로 처리
+                if campus_path == "1" and "조식" in meal_time and "방학중에는" in menu_name:
+                    menu_name = "방학"
+                    print(f"  > [Seoul Campus Breakfast] Replaced '방학중에는' with '방학'")
+                
                 print(f"  > Found menu for one day: '{menu_name.strip()}'")
 
                 # 메뉴가 없는 경우 제외
