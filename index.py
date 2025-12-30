@@ -428,15 +428,12 @@ def get_weather(campus: str = Query("SEOUL")):
     # 초단기실황용 base_time
     base_date, base_time = get_base_time()
     
-    # 단기예보용 base_time (오늘의 최저/최고 기온을 위해 02:00 기준 사용)
+    # 단기예보용 base_time (오늘의 최저/최고 기온을 위해 전날 23:00 발표분 사용)
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
-    if now.hour < 2 or (now.hour == 2 and now.minute < 10):
-        forecast_date = (now - timedelta(days=1)).strftime('%Y%m%d')
-        forecast_time = "2300"
-    else:
-        forecast_date = now.strftime('%Y%m%d')
-        forecast_time = "0200"
+    # 항상 전날 23:00 발표분을 사용하여 오늘의 최고/최저 기온을 얻음
+    forecast_date = (now - timedelta(days=1)).strftime('%Y%m%d')
+    forecast_time = "2300"
     
     url_current = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
     url_forecast = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
