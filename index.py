@@ -477,6 +477,10 @@ def get_weather(campus: str = Query("SEOUL")):
         # 초단기실황 API 호출
         response_current = requests.get(url_current, params=params_current, timeout=15)
         response_current.raise_for_status()
+
+        # 디버깅: 실제 응답 텍스트 확인
+        print(f"[DEBUG] Current Weather API Raw Response: {response_current.text}")
+        
         data_current = response_current.json()
         
         # 응답 구조 검증
@@ -513,6 +517,10 @@ def get_weather(campus: str = Query("SEOUL")):
         # 단기예보 API 호출
         response_forecast = requests.get(url_forecast, params=params_forecast, timeout=15)
         response_forecast.raise_for_status()
+
+        # 디버깅: 실제 응답 텍스트 확인
+        print(f"[DEBUG] Forecast API Raw Response: {response_forecast.text}")
+
         data_forecast = response_forecast.json()
         
         # 디버깅: 단기예보 API 파라미터 출력
