@@ -600,8 +600,13 @@ def get_weather(campus: str = Query("SEOUL")):
             "data": result
         }
 
+    except requests.exceptions.HTTPError as http_err:
+        return {"status": 'error', "message": f"날씨 API 서버 에러가 발생했습니다: {http_err}"}
+    except ValueError:
+        # response.json()이 실패하면 ValueError (또는 JSONDecodeError)가 발생합니다.
+        return {"status": 'error', "message": "날씨 API로부터 받은 데이터가 올바른 JSON 형식이 아닙니다."}
     except Exception as e:
-        return {"status": 'error', "message": str(e)}
+        return {"status": 'error', "message": f"알 수 없는 에러가 발생했습니다: {str(e)}"}
 
 @app.get("/")
 def root():
