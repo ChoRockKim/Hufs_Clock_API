@@ -145,12 +145,23 @@ def _extract_schedule_dates(items: List[Any]) -> Dict[str, str]:
         date_elems = item.find_all('p', class_='list-date')
         event_elems = item.find_all('p', class_='list-content')
         for date, event in zip(date_elems, event_elems):
-            date_str = date.get_text(strip=True).split('~')[-1].strip()
+            date_text = date.get_text(strip=True)
             event_str = event.get_text(strip=True)
-            if '제1학기 개강' in event_str: schedule_dates['first_start'] = date_str
-            elif '제1학기 기말시험' in event_str: schedule_dates['first_end'] = date_str
-            elif '제2학기 개강' in event_str: schedule_dates['second_start'] = date_str
-            elif '제2학기 기말시험' in event_str: schedule_dates['second_end'] = date_str
+            
+            # 날짜 범위 처리 (예: "03.03 ~ 06.22")
+            date_parts = [d.strip() for d in date_text.split('~')]
+            first_date = date_parts[0]
+            last_date = date_parts[-1]
+            
+            # 개강은 시작 날짜, 종강은 종료 날짜 사용
+            if '제1학기' in event_str and ('개강' in event_str or '학기개시일' in event_str): 
+                schedule_dates['first_start'] = first_date
+            elif '제1학기 기말시험' in event_str: 
+                schedule_dates['first_end'] = last_date
+            elif '제2학기' in event_str and ('개강' in event_str or '학기개시일' in event_str): 
+                schedule_dates['second_start'] = first_date
+            elif '제2학기 기말시험' in event_str: 
+                schedule_dates['second_end'] = last_date
     return schedule_dates
 
 def crawl_notices(url: str) -> List[Dict[str, str]]:
