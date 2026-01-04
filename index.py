@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*- 
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, Response, Query
+from fastapi import FastAPI, Response, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any
+from pydantic import BaseModel
+import json
+from urllib.parse import unquote
+from typing import Dict, Optional, List
 
 load_dotenv()
 
@@ -100,6 +104,23 @@ def get_forecast_base_time():
         base_time = f"{base_hour:02d}00"
     
     return base_date, base_time
+
+# 시간표 파라미터 규격 설정
+
+# 1. 리액트에서 받을 데이터 규격 정의
+class SearchRequest(BaseModel):
+    year: str
+    semester: str
+    campus: str
+    dept_code: str
+    keyword: str = ""
+    gubun: str
+    professor: str = ""
+    # 요일(d1~d6)과 교시(t1~t12) 중 선택된 것만 담긴 딕셔너리
+    # 예: {"d1": "Y", "t3": "Y"}
+    days: Optional[Dict[str, str]] = None
+    times: Optional[Dict[str, str]] = None
+
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -607,6 +628,71 @@ def get_weather(campus: str = Query("SEOUL")):
         return {"status": 'error', "message": "날씨 API로부터 받은 데이터가 올바른 JSON 형식이 아닙니다."}
     except Exception as e:
         return {"status": 'error', "message": f"알 수 없는 에러가 발생했습니다: {str(e)}"}
+
+# 시간표 요청 엔드포인트
+@app.post("/api/timetable")
+async def search_timetable(req: SearchRequest):
+    full_params = {
+        'mName': 'getDataLssnLista',
+        'cName': 'hufs.stu1.STU1_C009',
+        'org_sect': 'A',
+        'ledg_year': req.year,
+        'ledg_sessn': req.semester,          # 학기 (1: 1학기, 2: 여름학기, 3: 2학기, 4: 겨울학기)
+        'campus': req.campus,                # 캠퍼스 (H1: 서울, H2: 글로벌)
+        'crs_strct_cd': req.dept_code,
+        'gubun': req.gubun,
+        'subjt_nm': req.keyword,
+        'won': '', 'cyber': '', 
+        'emp_nm': req.professor,
+        # 딕셔너리 컴프리헨션으로 d1~d6, t1~t12를 'N'으로 한 번에 생성
+        **{f"d{i}": "N" for i in range(1, 7)},
+        **{f"t{i}": "N" for i in range(1, 13)}
+        }
+
+    # 3. 리액트에서 유저가 선택한 'Y' 값들이 있다면 템플릿에 덮어쓰기
+    if req.days:
+        full_params.update(req.days)
+    if req.times:
+        full_params.update(req.times)
+    
+    # 4. 학교 서버에 요청 전송
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': 'https://wis.hufs.ac.kr/hufs',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    try:
+        response = requests.post("https://wis.hufs.ac.kr/hufs", data=full_params, headers=headers)
+        response.raise_for_status()
+        
+        # 5. 해독 (URI Decoding -> JSON Parsing)
+        decoded_text = unquote(response.text)
+        data = json.loads(decoded_text)
+    
+        # 6. 데이터 정제 (리액트가 쓰기 편하게 가공)
+        raw_courses = data.get('data', [])
+        if not isinstance(raw_courses, list):
+            raw_courses = [raw_courses]
+
+        refined_results = []
+        for course in raw_courses:
+            refined_results.append({
+                "c_id": course.get('lssnCd'),          # 학수번호
+                "c_name": course.get('subjtNaKr'),     # 과목명
+                "professor": course.get('empNm'),      # 담당교수
+                "time": course.get('dayTime'),         # 강의시간 + 건물번호
+                "area": course.get('comptFldNm'),      # 이수구분
+                "credit": course.get('unitNum'),       # 학점
+                "capacity": f"{course.get('lectrOffrNo')}/{course.get('lectrConstNo')}", # 인원
+                "note": course.get('etc'),             # 비고
+                "grade" : course.get('dstGrad')        # 학년
+            })
+        
+        return refined_results
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"학교 서버 통신 오류: {str(e)}")
 
 @app.get("/")
 def root():
