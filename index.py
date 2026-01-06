@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from pydantic import BaseModel
 import json
 from urllib.parse import unquote
@@ -109,8 +109,8 @@ def get_forecast_base_time():
 
 # 1. 리액트에서 받을 데이터 규격 정의
 class SearchRequest(BaseModel):
-    year: str
-    semester: str
+    year: Union[str, int]
+    semester: Union[str, int]
     campus: str
     dept_code: str
     keyword: str = ""
