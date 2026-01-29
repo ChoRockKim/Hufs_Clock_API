@@ -134,20 +134,15 @@ HUFS_DOMAIN = "https://www.hufs.ac.kr"
 def crawl_schedule() -> Dict[str, str]:
     """HUFS 웹사이트에서 학사일정을 크롤링합니다."""
     try:
-        response = requests.get(f"{HUFS_DOMAIN}/hufs/index.do#section4", headers=HEADERS, timeout=5)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        schedule_link = soup.select_one('#top_k2wiz_GNB_11360')
-        if not schedule_link:
-            raise ValueError("학사일정 링크 CSS 선택자를 찾을 수 없습니다.")
-
-        schedule_url = HUFS_DOMAIN + schedule_link['href']
+        # 학사일정 페이지 URL로 직접 접속하도록 수정
+        schedule_url = f"{HUFS_DOMAIN}/hufs/11360/subview.do"
         schedule_response = requests.get(schedule_url, headers=HEADERS, timeout=5)
         schedule_response.raise_for_status()
         
         schedule_soup = BeautifulSoup(schedule_response.text, 'html.parser')
-        content_wrap = schedule_soup.find('div', class_='wrap-contents')
+        
+        # 이전에 수정한 내용(콘텐츠 영역 선택자)이 반영된 부분
+        content_wrap = schedule_soup.find('div', id='timeTableList')
         if not content_wrap:
             raise ValueError("학사일정 콘텐츠 영역을 찾을 수 없습니다.")
         
@@ -169,19 +164,17 @@ def _extract_schedule_dates(items: List[Any]) -> Dict[str, str]:
             date_text = date.get_text(strip=True)
             event_str = event.get_text(strip=True)
             
-            # 날짜 범위 처리 (예: "03.03 ~ 06.22")
             date_parts = [d.strip() for d in date_text.split('~')]
             first_date = date_parts[0]
             last_date = date_parts[-1]
             
-            # 개강은 시작 날짜, 종강은 종료 날짜 사용
             if '제1학기' in event_str and ('개강' in event_str or '학기개시일' in event_str): 
                 schedule_dates['first_start'] = first_date
             elif '제1학기 기말시험' in event_str: 
                 schedule_dates['first_end'] = last_date
             elif '제2학기' in event_str and ('개강' in event_str or '학기개시일' in event_str): 
                 schedule_dates['second_start'] = first_date
-            elif '제2학기 기말시험' in event_str: 
+            elif '제2학기 기말시험' in event_str:
                 schedule_dates['second_end'] = last_date
     return schedule_dates
 
