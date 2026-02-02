@@ -216,9 +216,9 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
     print(f"\n\n[!!!] Attempting to crawl meals for campus_path: {campus_path} [!!!]\n\n")
     try:
         today = datetime.now()
-        # 식당 페이지와 동일하게 월요일~토요일 범위로 계산
-        start_of_week = today - timedelta(days=today.weekday())  # 월요일
-        end_of_week = start_of_week + timedelta(days=5)  # 토요일
+        # 식당 페이지와 동일하게 일요일~토요일 범위로 계산
+        start_of_week = today - timedelta(days=(today.weekday() + 1) % 7)  # 일요일
+        end_of_week = start_of_week + timedelta(days=6)  # 토요일
 
         # 캠퍼스별 식당 ID 설정
         caf_id = "h101" if campus_path == "1" else "h203"
