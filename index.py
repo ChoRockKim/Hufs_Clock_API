@@ -219,60 +219,23 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
     print(f"\n\n[!!!] Attempting to crawl meals for campus_path: {campus_path} [!!!]\n\n")
     try:
         today = datetime.now()
-        # 식당 페이지와 동일하게 일요일~토요일 범위로 계산
-        start_of_week = today - timedelta(days=(today.weekday() + 1) % 7)  # 일요일
-        end_of_week = start_of_week + timedelta(days=6)  # 토요일
+        # 1. 주의 시작을 일요일로 계산
+        start_of_week = today - timedelta(days=(today.weekday() + 1) % 7)
+        end_of_week = start_of_week + timedelta(days=6)
 
         # 캠퍼스별 식당 ID 설정
         caf_id = "h101" if campus_path == "1" else "h203"
 
-        # 홈페이지는 현재 주의 같은 달 내 범위를 사용하는 것 같음
-        # 예: 현재 주가 12월 28일(토) ~ 1월 3일(금)이면, 12월 28일~31일만 사용
-        if start_of_week.month == today.month and end_of_week.month == today.month:
-            # 주 전체가 같은 달이면 그대로 사용
-            week_first_day = start_of_week.day
-            week_last_day = end_of_week.day
-        elif start_of_week.month == today.month:
-            # 주 시작일은 현재 달, 끝일은 다음 달
-            # 현재 달의 마지막 날까지 사용
-            if today.month == 12:
-                next_month = datetime(today.year + 1, 1, 1)
-            else:
-                next_month = datetime(today.year, today.month + 1, 1)
-            week_first_day = start_of_week.day
-            week_last_day = (next_month - timedelta(days=1)).day
-        elif end_of_week.month == today.month:
-            # 주 시작일은 이전 달, 끝일은 현재 달
-            # 현재 달의 1일부터 끝일까지 사용
-            week_first_day = 1
-            week_last_day = end_of_week.day
-        else:
-            # 주 전체가 다른 달 (현재 달이 중간에 있음)
-            # 현재 달의 전체 범위 사용
-            week_first_day = 1
-            if today.month == 12:
-                next_month = datetime(today.year + 1, 1, 1)
-            else:
-                next_month = datetime(today.year, today.month + 1, 1)
-            week_last_day = (next_month - timedelta(days=1)).day
-
+        # payload 구성
         payload = {
             "selCafId": caf_id,
-            "selWeekFirstDay": week_first_day,
-            "selWeekLastDay": week_last_day,
+            "selWeekFirstDay": start_of_week.day,
+            "selWeekLastDay": end_of_week.day,
             "selYear": today.year,
-            "selMonth": today.month  # 페이지는 현재 월을 그대로 전송
+            "selMonth": f"{today.month:02d}"  # 2. 월을 두 자릿수 문자열로 포맷
         }
 
-        # 디버깅: 생성된 파라미터 출력
-        print(f"[DEBUG] Meal crawling parameters:")
-        print(f"  - today: {today.strftime('%Y-%m-%d (%A)')}")
-        print(f"  - start_of_week: {start_of_week.strftime('%Y-%m-%d (%A)')}")
-        print(f"  - end_of_week: {end_of_week.strftime('%Y-%m-%d (%A)')}")
-        print(f"  - week_first_day: {week_first_day}")
-        print(f"  - week_last_day: {week_last_day}")
-        print(f"  - payload: {payload}")
-
+        # 3. 상세 헤더를 사용하여 요청
         api_url = f"https://www.hufs.ac.kr/cafeteria/hufs/{campus_path}/getMenu.do"
         response = requests.post(api_url, data=payload, headers=HEADERS, timeout=5)
         response.raise_for_status()
