@@ -3,9 +3,10 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import calendar
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict, Any, Union
 from pydantic import BaseModel
 import json
@@ -218,21 +219,30 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
     """HUFS 학식 API를 호출하여 이번 주 학식 메뉴를 가져옵니다."""
     print(f"\n\n[!!!] Attempting to crawl meals for campus_path: {campus_path} [!!!]\n\n")
     try:
-        today = datetime.now()
-        # 1. 주의 시작을 일요일로 계산
+        kst = timezone(timedelta(hours=9))
+        today = datetime.now(kst).date()
+        # 일요일 시작 주간 [start, end]
         start_of_week = today - timedelta(days=(today.weekday() + 1) % 7)
         end_of_week = start_of_week + timedelta(days=6)
+        # 웹사이트와 동일: selYear/selMonth는 «오늘» 달력 기준이며,
+        # 주간이 달을 넘기면 해당 월 구간과만 교집합(예: 3/29~4/4 주 → 3월에는 29~31일만 요청)
+        month_start = date(today.year, today.month, 1)
+        month_last = calendar.monthrange(today.year, today.month)[1]
+        month_end = date(today.year, today.month, month_last)
+        week_first = max(start_of_week, month_start)
+        week_last = min(end_of_week, month_end)
 
         # 캠퍼스별 식당 ID 설정
         caf_id = "h101" if campus_path == "1" else "h203"
 
-        # payload 구성
+        # payload 구성 (selDate는 공식 페이지가 보내는 값과 동일하게 유지)
         payload = {
             "selCafId": caf_id,
-            "selWeekFirstDay": start_of_week.day,
-            "selWeekLastDay": end_of_week.day,
+            "selWeekFirstDay": week_first.day,
+            "selWeekLastDay": week_last.day,
             "selYear": today.year,
-            "selMonth": f"{today.month:02d}"  # 2. 월을 두 자릿수 문자열로 포맷
+            "selMonth": f"{today.month:02d}",
+            "selDate": today.strftime("%Y%m%d"),
         }
 
         # 3. 상세 헤더를 사용하여 요청
@@ -265,10 +275,13 @@ def _crawl_meals_by_campus(campus_path: str) -> List[Dict[str, Any]]:
                         menu_name = event_menu_li.get_text(separator='\n', strip=True)
                 else:
                     # 일반적인 경우 (기존 로직)
+                    # 일부 HTML은 <td class="menu"><li>...</li> 처럼 ul 없이 li만 옴
                     menu_items_li = td.select('ul > li')
+                    if not menu_items_li:
+                        menu_items_li = td.find_all('li', recursive=False)
                     if menu_items_li:
                         # strong.point 태그가 없을 때를 대비해 li 텍스트 전체를 폴백으로 사용
-                        strong_texts = [s.get_text(strip=True) for s in td.select('ul > li > strong.point')]
+                        strong_texts = [s.get_text(strip=True) for s in td.select('li > strong.point')]
                         if strong_texts:
                             menu_name = '\n'.join(strong_texts)
                         else:
