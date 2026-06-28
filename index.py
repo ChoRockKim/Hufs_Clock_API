@@ -666,6 +666,15 @@ async def search_timetable(req: SearchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"학교 서버 통신 오류: {str(e)}")
 
+@app.get("/api/app-notices")
+def get_app_notices(response: Response):
+    """앱 자체 공지사항을 반환합니다. id 내림차순(최신순)으로 정렬."""
+    response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=300"
+    notices_path = os.path.join(os.path.dirname(__file__), "app_notices.json")
+    with open(notices_path, "r", encoding="utf-8") as f:
+        notices = json.load(f)
+    return sorted(notices, key=lambda x: x["id"], reverse=True)
+
 @app.get("/")
 def root():
     """API 서버의 상태를 확인하기 위한 기본 엔드포인트"""
