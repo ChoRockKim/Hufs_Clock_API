@@ -117,6 +117,8 @@ class SearchRequest(BaseModel):
     keyword: str = ""
     gubun: str
     professor: str = ""
+    # P/F 과목 필터: '%' = 전체(기본), '1' = P/F 과목만
+    pf: str = "%"
     # 요일(d1~d6)과 교시(t1~t12) 중 선택된 것만 담긴 딕셔너리
     # 예: {"d1": "Y", "t3": "Y"}
     days: Optional[Dict[str, str]] = None
@@ -616,6 +618,7 @@ async def search_timetable(req: SearchRequest):
         'subjt_nm': req.keyword,
         'won': '', 'cyber': '', 
         'emp_nm': req.professor,
+        'pf': req.pf or '%',                 # 누락 시 학교 서버가 0건을 반환하므로 필수
         # 딕셔너리 컴프리헨션으로 d1~d6, t1~t12를 'N'으로 한 번에 생성
         **{f"d{i}": "N" for i in range(1, 7)},
         **{f"t{i}": "N" for i in range(1, 13)}
@@ -635,7 +638,7 @@ async def search_timetable(req: SearchRequest):
     }
 
     try:
-        response = requests.post("https://wis.hufs.ac.kr/hufs", data=full_params, headers=headers)
+        response = requests.post("https://wis.hufs.ac.kr/hufs", data=full_params, headers=headers, timeout=10)
         response.raise_for_status()
         
         # 5. 해독 (URI Decoding -> JSON Parsing)
